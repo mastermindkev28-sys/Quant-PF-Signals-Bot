@@ -67,6 +67,9 @@ def main():
                         help="Run Monte Carlo analysis")
     parser.add_argument("--plot", action="store_true",
                         help="Generate and save charts")
+    parser.add_argument("--provider", default="yfinance",
+                        choices=["yfinance", "synthetic"],
+                        help="Data provider (default: yfinance; use synthetic if no internet)")
     parser.add_argument("--log-level", default="INFO",
                         choices=["DEBUG", "INFO", "WARNING"])
     args = parser.parse_args()
@@ -84,6 +87,7 @@ def main():
     cfg.prop = PROP_PRESETS[args.prop]
     cfg.data.default_start = args.start
     cfg.data.default_end = args.end
+    cfg.data.provider = args.provider
 
     inst = INSTRUMENTS[args.instrument]
     Path(cfg.results_dir).mkdir(parents=True, exist_ok=True)
