@@ -1,0 +1,48 @@
+# Fast-pass configuration — designed to hit $3,000 target in 2-5 days
+# Target firm: Apex $50K (no minimum trading days)
+# Instrument: NQ (most daily range, $20/pt)
+# Strategy: Dual Thrust intraday (5-min), both long and short
+#
+# DAILY MATH:
+#   3-day pass:  need $1,000/day net
+#   NQ 3 contracts @ $20/pt = $60/pt
+#   Need 17 clean points/day after commissions — very achievable in volatile sessions
+#
+# RISK RULES (auto-enforced by bot):
+#   Stop trading once +$1,000 made today (locks in gains, avoids consistency issues)
+#   Stop trading if -$800 on day (leaves $200 buffer before $1,000 daily limit)
+#   Always flat by 3:45pm ET
+
+instrument: NQ
+strategy: dual_thrust
+prop_preset: apex_50k
+
+dual_thrust:
+  lookback: 4          # 4-day range calculation
+  k_upper: 0.45        # tighter breakout = earlier entry
+  k_lower: 0.45
+  allow_short: true    # trade both sides
+  timeframe: 5min
+  session_start: "09:30"
+  session_end: "15:45"
+  exit_eod: true
+  reverse_on_opposite: true
+
+risk:
+  atr_period: 14
+  atr_stop_multiplier: 1.2   # tighter stop = better R:R
+  profit_target_r: 2.0       # take profit at 2R (2x the stop distance)
+  use_max_contracts: true     # always trade at prop firm max (5 contracts on Apex 50k)
+  daily_profit_target: 1000.0 # stop trading once $1,000 made today
+  commission_per_contract: 2.25
+  slippage_ticks: 1
+
+data:
+  provider: yfinance
+  cache_dir: prop_bot/data/cache
+  warmup_bars: 100
+
+live:
+  broker: tradovate
+  tradovate_demo: true
+  poll_interval_seconds: 30

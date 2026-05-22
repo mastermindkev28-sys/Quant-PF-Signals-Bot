@@ -97,6 +97,14 @@ class RiskManager:
         if d.halted:
             return False, f"HALTED: {d.halt_reason}"
 
+        # Daily profit target — stop trading once hit (locks in the day's gains)
+        daily_target = self.risk.daily_profit_target
+        if daily_target > 0 and d.gross_pnl >= daily_target:
+            d.halted = True
+            d.halt_reason = f"Daily profit target ${daily_target:.0f} reached — locking in gains"
+            logger.info("TARGET HIT — %s", d.halt_reason)
+            return False, d.halt_reason
+
         # Daily loss check
         if d.gross_pnl <= -self.prop.max_daily_loss:
             d.halted = True
@@ -152,14 +160,16 @@ class RiskManager:
         commission_cost = self.risk.commission_per_contract
         total_cost = dollar_risk_per_contract + slippage_cost + commission_cost
 
-        if self.risk.use_kelly:
+        # Aggressive mode: always use prop firm max contracts
+        if self.risk.use_max_contracts:
+            contracts = self.prop.max_contracts
+        elif self.risk.use_kelly:
             contracts = self._kelly_size(total_cost, win_rate, avg_win_loss_ratio)
         else:
             contracts = self._fractional_size(total_cost)
-
-        # Scale by signal strength (range [0.5, 1.0])
-        scale = 0.5 + 0.5 * signal_strength
-        contracts = max(1, round(contracts * scale))
+            # Scale by signal strength (range [0.5, 1.0])
+            scale = 0.5 + 0.5 * signal_strength
+            contracts = max(1, round(contracts * scale))
 
         # Hard caps
         contracts = min(contracts, self.prop.max_contracts)

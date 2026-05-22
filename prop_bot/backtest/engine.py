@@ -124,7 +124,9 @@ class BacktestEngine:
                     if ok:
                         self._open_short(ts, row)
 
-            # ---------- Intraday stop hit on bar close ----------
+            # ---------- Profit target and stop hit on bar close ----------
+            if self._open_trade:
+                self._check_profit_target_on_bar(ts, row)
             if self._open_trade:
                 self._check_stop_on_bar(ts, row)
 
@@ -223,6 +225,21 @@ class BacktestEngine:
             self._close_trade(ts, t.stop_price, "STOP_HIT")
         elif t.direction == -1 and row["high"] >= t.stop_price:
             self._close_trade(ts, t.stop_price, "STOP_HIT")
+
+    def _check_profit_target_on_bar(self, ts, row):
+        """Hit fixed R-multiple profit target if configured."""
+        t = self._open_trade
+        if t is None:
+            return
+        r = self.cfg.risk.profit_target_r
+        if r <= 0:
+            return
+        risk_pts = abs(t.entry_price - t.stop_price)
+        target_price = t.entry_price + t.direction * risk_pts * r
+        if t.direction == 1 and row["high"] >= target_price:
+            self._close_trade(ts, target_price, "TARGET_HIT")
+        elif t.direction == -1 and row["low"] <= target_price:
+            self._close_trade(ts, target_price, "TARGET_HIT")
 
     def _unrealised_pnl(self, current_price: float) -> float:
         t = self._open_trade

@@ -135,11 +135,13 @@ PROP_PRESETS: Dict[str, PropFirmRules] = {
         name="Topstep", account_size=50_000,
         max_daily_loss=1_000, max_trailing_drawdown=2_000,
         max_total_loss=2_500, max_contracts=3,
+        min_trading_days=10,
     ),
     "topstep_100k": PropFirmRules(
         name="Topstep", account_size=100_000,
         max_daily_loss=3_000, max_trailing_drawdown=4_500,
         max_total_loss=5_000, max_contracts=6,
+        min_trading_days=10,
     ),
     "lucid_25k": PropFirmRules(
         name="Lucid", account_size=25_000,
@@ -150,6 +152,31 @@ PROP_PRESETS: Dict[str, PropFirmRules] = {
         name="TopstepX", account_size=50_000,
         max_daily_loss=1_000, max_trailing_drawdown=2_500,
         max_total_loss=2_500, max_contracts=5,
+    ),
+    # No-minimum-days firms (best for fast pass)
+    "apex_50k": PropFirmRules(
+        name="Apex", account_size=50_000,
+        max_daily_loss=1_000, max_trailing_drawdown=2_500,
+        max_total_loss=2_500, max_contracts=5,
+        min_trading_days=0,
+    ),
+    "apex_100k": PropFirmRules(
+        name="Apex", account_size=100_000,
+        max_daily_loss=2_000, max_trailing_drawdown=3_000,
+        max_total_loss=3_000, max_contracts=10,
+        min_trading_days=0,
+    ),
+    "mff_50k": PropFirmRules(            # MyFundedFutures
+        name="MyFundedFutures", account_size=50_000,
+        max_daily_loss=1_000, max_trailing_drawdown=2_000,
+        max_total_loss=2_000, max_contracts=5,
+        min_trading_days=0,
+    ),
+    "tradeday_50k": PropFirmRules(
+        name="TradeDay", account_size=50_000,
+        max_daily_loss=1_000, max_trailing_drawdown=2_000,
+        max_total_loss=2_000, max_contracts=5,
+        min_trading_days=0,
     ),
 }
 
@@ -163,11 +190,15 @@ class RiskConfig:
     risk_per_trade_pct: float = 0.01     # 1% of account per trade
     atr_period: int = 14
     atr_stop_multiplier: float = 1.5     # stop = entry ± mult * ATR
+    profit_target_r: float = 0.0         # 0 = no fixed target; 2.0 = 2R target
     max_correlated_positions: int = 2
     use_kelly: bool = False              # Kelly-lite sizing (capped at 25%)
     kelly_fraction: float = 0.25        # fraction of full Kelly to use
     commission_per_contract: float = 2.25  # round-turn RT commission
     slippage_ticks: int = 1             # 1-tick slippage each side
+    # Aggressive / fast-pass mode
+    daily_profit_target: float = 0.0    # halt trading once day P&L >= this ($)
+    use_max_contracts: bool = False     # always size at prop firm max contracts
 
 
 # ---------------------------------------------------------------------------
