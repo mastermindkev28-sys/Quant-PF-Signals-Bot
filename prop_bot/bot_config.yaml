@@ -1,0 +1,32 @@
+# PropBot configuration — copy and edit this file
+# Override any value here; missing keys fall back to code defaults
+
+instrument: MGC          # MGC, GC, MNQ, NQ, MES, ES
+strategy: ibs            # ibs | dual_thrust
+prop_preset: topstep_50k # see config.py PROP_PRESETS
+
+ibs:
+  range_sma_period: 25
+  ibs_entry_threshold: 0.3
+  highest_high_lookback: 10
+  band_multiplier: 2.5
+  trend_sma_period: 300
+  max_holding_days: 10
+
+risk:
+  risk_per_trade_pct: 0.01
+  atr_period: 14
+  atr_stop_multiplier: 1.5
+  use_kelly: false
+  commission_per_contract: 2.25
+  slippage_ticks: 1
+
+data:
+  provider: yfinance
+  cache_dir: prop_bot/data/cache
+  warmup_bars: 350
+
+live:
+  broker: tradovate
+  tradovate_demo: true   # ALWAYS start on demo
+  poll_interval_seconds: 60
