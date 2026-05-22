@@ -1,0 +1,10 @@
+pandas>=2.0
+numpy>=1.24
+PyYAML>=6.0
+python-dotenv>=1.0
+yfinance>=0.2
+pandas-ta>=0.3.14b; python_version>="3.12"  # requires Python 3.12+
+matplotlib>=3.7
+pytest>=7.4
+# TA-Lib is optional (requires C library: apt install libta-lib-dev)
+# ta-lib>=0.4

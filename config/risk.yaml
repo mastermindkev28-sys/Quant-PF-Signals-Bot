@@ -1,0 +1,20 @@
+sizing_method: fractional   # options: fixed, fractional, volatility_target
+
+fixed:
+  contracts: 1
+
+fractional:
+  account_size: 100000.0
+  risk_per_trade_pct: 0.01   # 1% of account per trade
+  atr_period: 14
+  atr_multiplier: 2.0        # stop = entry ± atr_multiplier * ATR
+
+volatility_target:
+  account_size: 100000.0
+  daily_vol_target_pct: 0.005  # target 0.5% daily portfolio vol
+  vol_lookback: 20
+
+limits:
+  max_position_contracts: 5
+  max_daily_loss_pct: 0.02    # 2% of account
+  max_open_positions: 4

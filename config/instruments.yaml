@@ -1,0 +1,44 @@
+instruments:
+  ES:
+    symbol: "ES=F"
+    name: "E-mini S&P 500"
+    exchange: "CME"
+    tick_size: 0.25
+    point_value: 50.0
+    data_source: yfinance
+    strategy_overrides:
+      zscore_lookback: 20
+      entry_threshold: 2.0
+
+  NQ:
+    symbol: "NQ=F"
+    name: "E-mini NASDAQ-100"
+    exchange: "CME"
+    tick_size: 0.25
+    point_value: 20.0
+    data_source: yfinance
+    strategy_overrides:
+      zscore_lookback: 20
+      entry_threshold: 2.0
+
+  CL:
+    symbol: "CL=F"
+    name: "Crude Oil"
+    exchange: "NYMEX"
+    tick_size: 0.01
+    point_value: 1000.0
+    data_source: yfinance
+    strategy_overrides:
+      zscore_lookback: 15
+      entry_threshold: 1.8
+
+  GC:
+    symbol: "GC=F"
+    name: "Gold"
+    exchange: "COMEX"
+    tick_size: 0.10
+    point_value: 100.0
+    data_source: yfinance
+    strategy_overrides:
+      zscore_lookback: 20
+      entry_threshold: 2.0

@@ -1,0 +1,16 @@
+active_strategy: zscore  # options: zscore, bollinger, combined
+
+zscore:
+  lookback_period: 20
+  entry_threshold: 2.0
+  exit_threshold: 0.5
+  price_field: close    # close, spread
+
+bollinger:
+  period: 20
+  std_dev: 2.0
+  exit_band: 0.5       # pct_b level to exit (0.5 = middle band)
+  squeeze_filter: true  # skip signals when band width percentile < 20
+
+combined:
+  mode: AND            # AND = both must agree, OR = either triggers
