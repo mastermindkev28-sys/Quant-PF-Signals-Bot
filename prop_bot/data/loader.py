@@ -74,11 +74,39 @@ def load_yfinance(
         raise ImportError("pip install yfinance")
 
     interval = _yf_interval(timeframe)
+
+    # yfinance hard limits for intraday data:
+    #   1m  → last  7 days only
+    #   5m  → last 60 days only
+    #   15m → last 60 days only
+    #   1h  → last 730 days only
+    # For backtesting beyond these windows, automatically fall back to daily bars.
+    INTRADAY_INTERVALS = {"1m", "2m", "5m", "15m", "30m", "60m", "90m", "1h"}
+    if interval in INTRADAY_INTERVALS:
+        from datetime import datetime, timezone
+        req_start = pd.Timestamp(start)
+        cutoffs = {"1m": 7, "5m": 60, "15m": 60, "30m": 60, "1h": 730, "60m": 730, "90m": 60}
+        max_days = cutoffs.get(interval, 60)
+        earliest_allowed = pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=max_days)
+        if req_start.tz is None:
+            req_start = req_start.tz_localize("UTC")
+        if req_start < earliest_allowed:
+            logger.warning(
+                "yfinance only provides %s data for the last %d days. "
+                "Requested start %s is too old — falling back to daily (1d) bars for backtesting. "
+                "For live signals the bot will use %s bars normally.",
+                interval, max_days, start, interval,
+            )
+            interval = "1d"
+
     logger.info("Downloading %s %s %s→%s via yfinance", symbol, interval, start, end)
     ticker = yf.Ticker(symbol)
     df = ticker.history(start=start, end=end, interval=interval, auto_adjust=True)
     if df.empty:
-        raise ValueError(f"No data returned for {symbol}")
+        raise ValueError(
+            f"No data returned for {symbol} ({interval}). "
+            "Check the symbol is correct and the date range is valid."
+        )
 
     df = df.rename(columns=str.lower)
     df.index = pd.to_datetime(df.index)
