@@ -147,6 +147,13 @@ PROP_PRESETS: Dict[str, PropFirmRules] = {
         name="Lucid", account_size=25_000,
         max_daily_loss=500, max_trailing_drawdown=1_000,
         max_total_loss=1_500, max_contracts=2,
+        min_trading_days=0,
+    ),
+    "lucid_50k": PropFirmRules(
+        name="Lucid", account_size=50_000,
+        max_daily_loss=1_000, max_trailing_drawdown=2_000,
+        max_total_loss=2_500, max_contracts=5,
+        min_trading_days=0,
     ),
     "topstepx_50k": PropFirmRules(
         name="TopstepX", account_size=50_000,

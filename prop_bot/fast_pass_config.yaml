@@ -15,7 +15,7 @@
 
 instrument: NQ
 strategy: dual_thrust
-prop_preset: apex_50k
+prop_preset: lucid_50k
 
 dual_thrust:
   lookback: 4          # 4-day range calculation
