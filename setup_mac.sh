@@ -25,9 +25,22 @@ echo ""
 # ---------------------------------------------------------------
 step "Checking Homebrew"
 if ! command -v brew &>/dev/null; then
-    warn "Homebrew not found — installing..."
+    # Check if we're in an interactive terminal — if not, guide the user
+    if [ ! -t 0 ]; then
+        echo ""
+        echo "  ⚠  Cannot install Homebrew automatically (non-interactive mode)."
+        echo ""
+        echo "  Run this command in your Terminal window instead:"
+        echo ""
+        echo '  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/homebrew/install/HEAD/install.sh)"'
+        echo ""
+        echo "  Then run this script again:  bash ~/setup_mac.sh"
+        echo ""
+        exit 1
+    fi
+    warn "Homebrew not found — installing (you may be asked for your Mac password)..."
     /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/homebrew/install/HEAD/install.sh)"
-    # Add brew to PATH for Apple Silicon
+    # Add brew to PATH for Apple Silicon Macs
     if [[ $(uname -m) == "arm64" ]]; then
         echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
         eval "$(/opt/homebrew/bin/brew shellenv)"
@@ -46,15 +59,15 @@ if command -v python3 &>/dev/null; then
     PY_MAJOR=$(echo $PY_VERSION | cut -d. -f1)
     PY_MINOR=$(echo $PY_VERSION | cut -d. -f2)
     if [ "$PY_MAJOR" -ge 3 ] && [ "$PY_MINOR" -ge 10 ]; then
-        info "Python $PY_VERSION found"
+        info "Python $PY_VERSION — good"
         PYTHON=python3
     else
-        warn "Python $PY_VERSION is too old — installing 3.11"
+        warn "Python $PY_VERSION too old — installing 3.11 via Homebrew"
         brew install python@3.11
         PYTHON=python3.11
     fi
 else
-    warn "Python not found — installing 3.11"
+    warn "Python not found — installing 3.11 via Homebrew"
     brew install python@3.11
     PYTHON=python3.11
 fi
