@@ -1,0 +1,349 @@
+//@version=6
+// =============================================================================
+//  H1 Range -> Break -> CHoCH -> IFVG
+// -----------------------------------------------------------------------------
+//  1. Marks the high / low of the H1 candle that opens after 05:30 PST
+//     (default 06:00-07:00 America/Los_Angeles = 09:00-10:00 New York).
+//  2. Labels the break of that high or low.
+//  3. Labels the change of character (CHoCH) that follows the break.
+//  4. Labels the inverse fair value gap (IFVG) that confirms the reversal.
+//
+//  A "SETUP" label fires only when all three appear in order:
+//     range break  ->  opposing CHoCH  ->  IFVG in the CHoCH direction.
+// =============================================================================
+indicator("H1 Range -> Break -> CHoCH -> IFVG", "H1 RB / CHoCH / IFVG",
+     overlay          = true,
+     max_lines_count  = 500,
+     max_labels_count = 500,
+     max_boxes_count  = 500)
+
+// ============================== INPUTS =======================================
+GR = "1 - Range (the H1 candle after 05:30 PST)"
+tzIn     = input.string("America/Los_Angeles", "Timezone (IANA)", group = GR,
+     tooltip = "Handles PST/PDT automatically. Other examples: America/New_York, Europe/London, UTC.")
+rHour    = input.int(6, "Range opens at", minval = 0, maxval = 23, inline = "rs", group = GR)
+rMinute  = input.int(0, ":",              minval = 0, maxval = 59, inline = "rs", group = GR,
+     tooltip = "06:00 PST is the first hourly candle that opens after 05:30. If your feed prints :30-aligned hourlies, set 05:30.")
+rLen     = input.int(60, "Range length (minutes)", minval = 1, maxval = 1440, group = GR)
+showMid  = input.bool(true,  "Show midline (EQ)",  group = GR)
+keepHist = input.bool(true,  "Keep previous days", group = GR)
+colHi    = input.color(color.new(#26a69a, 0),  "High / Low", inline = "rc", group = GR)
+colLo    = input.color(color.new(#ef5350, 0),  "",           inline = "rc", group = GR)
+colFill  = input.color(color.new(#ffa726, 88), "Range fill", group = GR)
+
+GB = "2 - Break of the range"
+breakClose   = input.bool(true,  "Require a candle close beyond the level", group = GB,
+     tooltip = "Off = a wick through the level counts as a break.")
+oneBreakOnly = input.bool(false, "Only label the first break of the day",   group = GB)
+
+GC = "3 - Change of character"
+swingLen  = input.int(5, "Swing pivot length", minval = 1, group = GC,
+     tooltip = "Bars either side of a pivot. Larger = fewer, more significant swings.")
+showBOS   = input.bool(false, "Also label BOS (continuation)",          group = GC)
+chochPost = input.bool(true,  "Only label CHoCH after the range breaks", group = GC)
+
+GI = "4 - Inverse fair value gap"
+showFVG  = input.bool(false, "Show raw FVGs before inversion",         group = GI)
+maxFvg   = input.int(24, "Max tracked FVGs", minval = 1, maxval = 100, group = GI)
+minFvgTk = input.float(0.0, "Min FVG size (ticks, 0 = off)", minval = 0, group = GI)
+fvgAge   = input.int(0, "Drop FVGs older than N bars (0 = never)", minval = 0, group = GI)
+colBull  = input.color(color.new(#26a69a, 78), "Bullish IFVG", inline = "ic", group = GI)
+colBear  = input.color(color.new(#ef5350, 78), "Bearish IFVG", inline = "ic", group = GI)
+
+GS = "5 - Setup and panel"
+seqOnly   = input.bool(true, "Setup label requires Break -> CHoCH -> IFVG", group = GS)
+showPanel = input.bool(true, "Show status panel", group = GS)
+
+// ============================== HELPERS ======================================
+pad2(int v) => (v < 10 ? "0" : "") + str.tostring(v)
+stCol(bool ok) => ok ? color.new(#26a69a, 25) : color.new(color.gray, 45)
+
+// ============================== RANGE WINDOW =================================
+tMin     = hour(time, tzIn) * 60 + minute(time, tzIn)
+startMod = rHour * 60 + rMinute
+endMod   = startMod + rLen
+
+inWindow = rLen >= 1440 ? true : endMod <= 1440 ? (tMin >= startMod and tMin < endMod) : (tMin >= startMod or tMin < endMod - 1440)
+
+prevIn      = nz(inWindow[1], false)
+windowOpen  = inWindow and not prevIn
+windowClose = not inWindow and prevIn
+
+// ============================== STATE ========================================
+var float rHigh     = na
+var float rLow      = na
+var int   rStart    = na
+var int   rEnd      = na
+var bool  rReady    = false
+var bool  brokeUp   = false
+var bool  brokeDn   = false
+var int   setupDir  = 0     //  1 = broke the high, -1 = broke the low
+var int   wantChoch = 0     //  CHoCH direction we are waiting for
+var int   wantIfvg  = 0     //  IFVG direction we are waiting for
+var bool  chochOk   = false
+var bool  setupOk   = false
+
+var line  lnH = na
+var line  lnL = na
+var line  lnM = na
+var box   bxR = na
+var label lbH = na
+var label lbL = na
+
+if windowOpen
+    if not keepHist
+        line.delete(lnH)
+        line.delete(lnL)
+        line.delete(lnM)
+        box.delete(bxR)
+        label.delete(lbH)
+        label.delete(lbL)
+    rHigh     := high
+    rLow      := low
+    rStart    := bar_index
+    rEnd      := bar_index
+    rReady    := false
+    brokeUp   := false
+    brokeDn   := false
+    setupDir  := 0
+    wantChoch := 0
+    wantIfvg  := 0
+    chochOk   := false
+    setupOk   := false
+    bxR := box.new(bar_index, high, bar_index, low, border_color = color.new(colFill, 40), bgcolor = colFill, border_width = 1)
+    lnH := line.new(bar_index, high, bar_index, high, color = colHi, width = 2)
+    lnL := line.new(bar_index, low,  bar_index, low,  color = colLo, width = 2)
+    lnM := line.new(bar_index, math.avg(high, low), bar_index, math.avg(high, low), color = color.new(color.gray, 40), style = line.style_dotted)
+    lbH := label.new(bar_index, high, "H1 High", style = label.style_label_left, color = color.new(color.black, 100), textcolor = colHi, size = size.small)
+    lbL := label.new(bar_index, low,  "H1 Low",  style = label.style_label_left, color = color.new(color.black, 100), textcolor = colLo, size = size.small)
+else if inWindow
+    rHigh := math.max(rHigh, high)
+    rLow  := math.min(rLow,  low)
+    rEnd  := bar_index
+
+if windowClose
+    rReady := true
+
+// keep the drawings live until the next window opens
+if not na(lnH) and not na(rHigh)
+    mid = math.avg(rHigh, rLow)
+    line.set_xy1(lnH, rStart, rHigh)
+    line.set_xy2(lnH, bar_index + 1, rHigh)
+    line.set_xy1(lnL, rStart, rLow)
+    line.set_xy2(lnL, bar_index + 1, rLow)
+    line.set_xy1(lnM, rStart, mid)
+    line.set_xy2(lnM, bar_index + 1, mid)
+    line.set_color(lnM, showMid ? color.new(color.gray, 40) : color.new(color.gray, 100))
+    box.set_lefttop(bxR, rStart, rHigh)
+    box.set_rightbottom(bxR, rEnd + 1, rLow)
+    label.set_xy(lbH, bar_index + 1, rHigh)
+    label.set_xy(lbL, bar_index + 1, rLow)
+    label.set_text(lbH, "H1 High " + str.tostring(rHigh, format.mintick))
+    label.set_text(lbL, "H1 Low "  + str.tostring(rLow,  format.mintick))
+
+// ============================== 2 - BREAK ====================================
+canBreak = oneBreakOnly ? not (brokeUp or brokeDn) : true
+upBreak  = rReady and not brokeUp and canBreak and (breakClose ? close > rHigh : high > rHigh)
+dnBreak  = rReady and not brokeDn and canBreak and (breakClose ? close < rLow  : low  < rLow)
+
+if upBreak
+    brokeUp   := true
+    setupDir  := 1
+    wantChoch := -1
+    wantIfvg  := 0
+    chochOk   := false
+    setupOk   := false
+    label.new(bar_index, high, "BREAK ▲", style = label.style_label_down, color = color.new(colHi, 20), textcolor = color.white, size = size.small)
+
+if dnBreak
+    brokeDn   := true
+    setupDir  := -1
+    wantChoch := 1
+    wantIfvg  := 0
+    chochOk   := false
+    setupOk   := false
+    label.new(bar_index, low, "BREAK ▼", style = label.style_label_up, color = color.new(colLo, 20), textcolor = color.white, size = size.small)
+
+// ============================== 3 - CHoCH ====================================
+ph = ta.pivothigh(swingLen, swingLen)
+pl = ta.pivotlow(swingLen, swingLen)
+
+var float lastPH  = na
+var float lastPL  = na
+var bool  phTaken = true
+var bool  plTaken = true
+var int   trend   = 0
+
+if not na(ph)
+    lastPH  := ph
+    phTaken := false
+if not na(pl)
+    lastPL  := pl
+    plTaken := false
+
+msUp = not phTaken and not na(lastPH) and close > lastPH
+msDn = not plTaken and not na(lastPL) and close < lastPL
+
+chochUp = false
+chochDn = false
+
+if msUp
+    phTaken := true
+    chochUp := trend < 0
+    trend   := 1
+if msDn
+    plTaken := true
+    chochDn := trend > 0
+    trend   := -1
+
+bosUp = msUp and not chochUp
+bosDn = msDn and not chochDn
+
+if chochUp and (not chochPost or setupDir != 0)
+    label.new(bar_index, low, "CHoCH ▲", style = label.style_label_up, color = color.new(#26a69a, 25), textcolor = color.white, size = size.small)
+if chochDn and (not chochPost or setupDir != 0)
+    label.new(bar_index, high, "CHoCH ▼", style = label.style_label_down, color = color.new(#ef5350, 25), textcolor = color.white, size = size.small)
+if showBOS and bosUp
+    label.new(bar_index, low, "BOS", style = label.style_label_up, color = color.new(color.gray, 55), textcolor = color.white, size = size.tiny)
+if showBOS and bosDn
+    label.new(bar_index, high, "BOS", style = label.style_label_down, color = color.new(color.gray, 55), textcolor = color.white, size = size.tiny)
+
+// the CHoCH we want is the one against the direction of the range break
+if setupDir != 0 and not chochOk
+    if (wantChoch == 1 and chochUp) or (wantChoch == -1 and chochDn)
+        chochOk  := true
+        wantIfvg := wantChoch
+
+// ============================== 4 - IFVG =====================================
+var array<float> fTop   = array.new<float>()
+var array<float> fBot   = array.new<float>()
+var array<int>   fDir   = array.new<int>()    //  1 bullish,  -1 bearish
+var array<int>   fState = array.new<int>()    //  0 raw FVG,   1 inverted (IFVG)
+var array<int>   fBar   = array.new<int>()
+var array<box>   fBox   = array.new<box>()
+
+minGap     = minFvgTk * syminfo.mintick
+newBullFvg = low > high[2] and (low - high[2]) >= minGap
+newBearFvg = high < low[2] and (low[2] - high) >= minGap
+
+if newBullFvg or newBearFvg
+    gTop = newBullFvg ? low : low[2]
+    gBot = newBullFvg ? high[2] : high
+    gDir = newBullFvg ? 1 : -1
+    gCol = showFVG ? color.new(gDir == 1 ? #26a69a : #ef5350, 92) : color.new(color.gray, 100)
+    gBox = box.new(bar_index - 2, gTop, bar_index + 1, gBot, border_color = color.new(color.gray, showFVG ? 70 : 100), bgcolor = gCol)
+    array.push(fTop, gTop)
+    array.push(fBot, gBot)
+    array.push(fDir, gDir)
+    array.push(fState, 0)
+    array.push(fBar, bar_index)
+    array.push(fBox, gBox)
+    if array.size(fTop) > maxFvg
+        box.delete(array.get(fBox, 0))
+        array.shift(fTop)
+        array.shift(fBot)
+        array.shift(fDir)
+        array.shift(fState)
+        array.shift(fBar)
+        array.shift(fBox)
+
+newIfvgUp = false
+newIfvgDn = false
+
+if array.size(fTop) > 0
+    for i = array.size(fTop) - 1 to 0
+        zTop = array.get(fTop, i)
+        zBot = array.get(fBot, i)
+        zDir = array.get(fDir, i)
+        zSt  = array.get(fState, i)
+        zBox = array.get(fBox, i)
+        kill = false
+
+        if zSt == 0
+            // a gap price closes straight through flips into an IFVG
+            if zDir == 1 and close < zBot
+                array.set(fState, i, 1)
+                array.set(fDir, i, -1)           // bullish gap inverted -> bearish IFVG
+                box.set_bgcolor(zBox, colBear)
+                box.set_border_color(zBox, color.new(#ef5350, 40))
+                box.set_text(zBox, "IFVG")
+                box.set_text_color(zBox, color.new(#ef5350, 0))
+                box.set_text_size(zBox, size.tiny)
+                box.set_text_halign(zBox, text.align_right)
+                newIfvgDn := true
+            else if zDir == -1 and close > zTop
+                array.set(fState, i, 1)
+                array.set(fDir, i, 1)            // bearish gap inverted -> bullish IFVG
+                box.set_bgcolor(zBox, colBull)
+                box.set_border_color(zBox, color.new(#26a69a, 40))
+                box.set_text(zBox, "IFVG")
+                box.set_text_color(zBox, color.new(#26a69a, 0))
+                box.set_text_size(zBox, size.tiny)
+                box.set_text_halign(zBox, text.align_right)
+                newIfvgUp := true
+        else
+            // an IFVG dies when price closes back through the far side
+            kill := (zDir == 1 and close < zBot) or (zDir == -1 and close > zTop)
+
+        if fvgAge > 0 and bar_index - array.get(fBar, i) > fvgAge
+            kill := true
+
+        if kill
+            box.delete(zBox)
+            array.remove(fTop, i)
+            array.remove(fBot, i)
+            array.remove(fDir, i)
+            array.remove(fState, i)
+            array.remove(fBar, i)
+            array.remove(fBox, i)
+        else
+            box.set_right(zBox, bar_index + 1)
+
+if newIfvgUp
+    label.new(bar_index, low, "IFVG ▲", style = label.style_label_up, color = color.new(#26a69a, 35), textcolor = color.white, size = size.tiny)
+if newIfvgDn
+    label.new(bar_index, high, "IFVG ▼", style = label.style_label_down, color = color.new(#ef5350, 35), textcolor = color.white, size = size.tiny)
+
+// ============================== 5 - SETUP ====================================
+seqLong    = chochOk and wantIfvg ==  1 and newIfvgUp
+seqShort   = chochOk and wantIfvg == -1 and newIfvgDn
+setupLong  = seqOnly ? seqLong  : newIfvgUp
+setupShort = seqOnly ? seqShort : newIfvgDn
+
+if setupLong or setupShort
+    setupOk := true
+    chochOk := false
+if setupLong
+    label.new(bar_index, low, "SETUP ▲\nbreak · CHoCH · IFVG", style = label.style_label_up, color = color.new(#00897b, 10), textcolor = color.white, size = size.normal)
+    alert("Long setup: H1 range break, CHoCH up, bullish IFVG on " + syminfo.ticker, alert.freq_once_per_bar_close)
+if setupShort
+    label.new(bar_index, high, "SETUP ▼\nbreak · CHoCH · IFVG", style = label.style_label_down, color = color.new(#c62828, 10), textcolor = color.white, size = size.normal)
+    alert("Short setup: H1 range break, CHoCH down, bearish IFVG on " + syminfo.ticker, alert.freq_once_per_bar_close)
+
+// ============================== PANEL ========================================
+var table tbl = table.new(position.top_right, 2, 6, border_width = 1)
+if showPanel and barstate.islast
+    hdr = color.new(color.black, 25)
+    off = color.new(color.gray, 45)
+    table.cell(tbl, 0, 0, "H1 range", text_color = color.white, bgcolor = hdr, text_size = size.small)
+    table.cell(tbl, 1, 0, pad2(rHour) + ":" + pad2(rMinute) + " +" + str.tostring(rLen) + "m", text_color = color.white, bgcolor = hdr, text_size = size.small)
+    table.cell(tbl, 0, 1, "High", text_color = color.white, bgcolor = off, text_size = size.small)
+    table.cell(tbl, 1, 1, na(rHigh) ? "-" : str.tostring(rHigh, format.mintick), text_color = color.white, bgcolor = off, text_size = size.small)
+    table.cell(tbl, 0, 2, "Low", text_color = color.white, bgcolor = off, text_size = size.small)
+    table.cell(tbl, 1, 2, na(rLow) ? "-" : str.tostring(rLow, format.mintick), text_color = color.white, bgcolor = off, text_size = size.small)
+    table.cell(tbl, 0, 3, "Break", text_color = color.white, bgcolor = stCol(setupDir != 0), text_size = size.small)
+    table.cell(tbl, 1, 3, setupDir == 1 ? "high ▲" : setupDir == -1 ? "low ▼" : "waiting", text_color = color.white, bgcolor = stCol(setupDir != 0), text_size = size.small)
+    table.cell(tbl, 0, 4, "CHoCH", text_color = color.white, bgcolor = stCol(chochOk or setupOk), text_size = size.small)
+    table.cell(tbl, 1, 4, chochOk ? (wantIfvg == 1 ? "up ▲" : "down ▼") : setupOk ? "done" : "waiting", text_color = color.white, bgcolor = stCol(chochOk or setupOk), text_size = size.small)
+    table.cell(tbl, 0, 5, "IFVG", text_color = color.white, bgcolor = stCol(setupOk), text_size = size.small)
+    table.cell(tbl, 1, 5, setupOk ? "setup fired" : "waiting", text_color = color.white, bgcolor = stCol(setupOk), text_size = size.small)
+
+// ============================== ALERTS =======================================
+alertcondition(upBreak,    "Range high broken", "Price broke the H1 range high")
+alertcondition(dnBreak,    "Range low broken",  "Price broke the H1 range low")
+alertcondition(chochUp,    "CHoCH up",          "Bullish change of character")
+alertcondition(chochDn,    "CHoCH down",        "Bearish change of character")
+alertcondition(newIfvgUp,  "Bullish IFVG",      "A bearish FVG inverted into support")
+alertcondition(newIfvgDn,  "Bearish IFVG",      "A bullish FVG inverted into resistance")
+alertcondition(setupLong,  "Long setup",        "H1 range break -> CHoCH up -> bullish IFVG")
+alertcondition(setupShort, "Short setup",       "H1 range break -> CHoCH down -> bearish IFVG")

@@ -50,6 +50,14 @@ JSON-lines to stdout:
 
 `signal`: `1` = long, `-1` = short, `0` = flat.
 
+## TradingView Indicator
+
+`tradingview/h1_range_break_choch_ifvg.pine` — Pine Script v6 overlay that marks the high
+and low of the H1 candle opening after 05:30 PST (06:00–07:00 America/Los_Angeles), then
+labels the reversal sequence that follows: **range break → change of character → inverse
+fair value gap**, with alerts on each step. See `tradingview/README.md` for install and
+tuning.
+
 ## Project Structure
 
 ```
@@ -62,6 +70,7 @@ signals/
   backtest/       # Backtester engine + metrics
   runner/         # LiveRunner polling loop
 scripts/          # run_backtest.py, run_live.py
+tradingview/      # Pine Script indicators
 tests/            # pytest suite with synthetic AR(1) data
 ```
 
